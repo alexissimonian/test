@@ -1,8 +1,18 @@
 package main
 
-import "fmt"
+import (
+	"github.com/alexissimonian/test/bootdev/pokedexcli/pokeapi"
+)
 
-func main(){
-    fmt.Println("hello world")
+type config struct {
+	httpClient              pokeapi.Client
+	nextLocationAreaURL     *string
+	previousLocationAreaURL *string
 }
 
+func main() {
+    config := config{
+        httpClient: pokeapi.NewClient(),
+    }
+	startREPL(&config)
+}

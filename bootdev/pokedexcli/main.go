@@ -1,18 +1,18 @@
 package main
 
 import (
-	"github.com/alexissimonian/test/bootdev/pokedexcli/pokeapi"
+	"github.com/alexissimonian/test/bootdev/pokedexcli/internal/pokeapi"
 )
 
 type config struct {
-	httpClient              pokeapi.Client
+	pokeapiHttpClient              pokeapi.Client
 	nextLocationAreaURL     *string
 	previousLocationAreaURL *string
 }
 
 func main() {
     config := config{
-        httpClient: pokeapi.NewClient(),
+        pokeapiHttpClient: pokeapi.NewClient(),
     }
 	startREPL(&config)
 }

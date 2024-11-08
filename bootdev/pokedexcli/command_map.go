@@ -6,7 +6,7 @@ import (
 )
 
 func callbackMap(cfg *config) error {
-    pokeClient := cfg.httpClient
+    pokeClient := cfg.pokeapiHttpClient
 	locationAreas, err := pokeClient.ListLocationAreas(cfg.nextLocationAreaURL)
 	if err != nil {
 		log.Fatal(err)

@@ -6,7 +6,10 @@ import (
 )
 
 func callbackMapb(cfg *config) error {
-    pokeClient := cfg.httpClient
+    if cfg.previousLocationAreaURL == nil {
+        return fmt.Errorf("You're on the first page")
+    }
+    pokeClient := cfg.pokeapiHttpClient
 	locationAreas, err := pokeClient.ListLocationAreas(cfg.previousLocationAreaURL)
 	if err != nil {
 		log.Fatal(err)

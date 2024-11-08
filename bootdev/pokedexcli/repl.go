@@ -28,7 +28,10 @@ func startREPL(cfg *config) {
 			continue
 		}
 
-		command.callback(cfg)
+		err := command.callback(cfg)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 

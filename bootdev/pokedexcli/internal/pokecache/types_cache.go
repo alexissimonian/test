@@ -3,11 +3,10 @@ package pokecache
 import "time"
 
 type Cache struct {
-    data map[string]cacheEntry
-    
+	cache map[string]cacheEntry
 }
 
 type cacheEntry struct {
-    createdAt time.Time
-    val []byte
+	createdAt time.Time
+	val       []byte
 }

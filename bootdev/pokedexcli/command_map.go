@@ -2,14 +2,13 @@ package main
 
 import (
 	"fmt"
-	"log"
 )
 
 func callbackMap(cfg *config) error {
     pokeClient := cfg.pokeapiHttpClient
 	locationAreas, err := pokeClient.ListLocationAreas(cfg.nextLocationAreaURL)
 	if err != nil {
-		log.Fatal(err)
+        return err
 	}
 
 	for _, area := range locationAreas.Results {

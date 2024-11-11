@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-func callbackMapb(cfg *config) error {
+func callbackMapb(cfg *config, args ...string) error {
 	if cfg.previousLocationAreaURL == nil {
 		return fmt.Errorf("You're on the first page")
 	}

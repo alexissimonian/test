@@ -1,8 +1,12 @@
 package pokecache
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type Cache struct {
+    mu *sync.Mutex
 	cache map[string]cacheEntry
 }
 

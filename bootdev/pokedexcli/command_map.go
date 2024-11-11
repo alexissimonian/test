@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-func callbackMap(cfg *config) error {
+func callbackMap(cfg *config, args ...string) error {
     pokeClient := cfg.pokeapiHttpClient
 	locationAreas, err := pokeClient.ListLocationAreas(cfg.nextLocationAreaURL)
 	if err != nil {

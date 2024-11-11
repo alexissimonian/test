@@ -28,7 +28,7 @@ func startREPL(cfg *config) {
 			continue
 		}
 
-        args := []string{}
+		args := []string{}
 		if len(cleaned) > 1 {
 			args = cleaned[1:]
 		}

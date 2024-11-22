@@ -1,13 +1,17 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 
 	"github.com/alexissimonian/test/bootdev/gator/internal/config"
+	"github.com/alexissimonian/test/bootdev/gator/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type state struct {
+    db *database.Queries
 	config *config.Config
 }
 
@@ -20,6 +24,14 @@ func main() {
 	currentState := state{
 		config: &currentConfig,
 	}
+
+	dbURL := currentState.config.DbURL
+    db, err := sql.Open("postgres", dbURL)
+    if err != nil {
+        fmt.Printf("Something went wrong opening database connection: %v\n", err)
+    }
+
+    currentState.db = database.New(db)
 
 	allCommands := commands{
 		commands: make(map[string]func(*state, command) error),

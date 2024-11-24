@@ -11,7 +11,7 @@ import (
 )
 
 type state struct {
-    db *database.Queries
+	db     *database.Queries
 	config *config.Config
 }
 
@@ -26,18 +26,23 @@ func main() {
 	}
 
 	dbURL := currentState.config.DbURL
-    db, err := sql.Open("postgres", dbURL)
-    if err != nil {
-        fmt.Printf("Something went wrong opening database connection: %v\n", err)
-    }
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		fmt.Printf("Something went wrong opening database connection: %v\n", err)
+	}
 
-    currentState.db = database.New(db)
+	currentState.db = database.New(db)
 
 	allCommands := commands{
 		commands: make(map[string]func(*state, command) error),
 	}
 
 	allCommands.register("login", handlerLogin)
+	allCommands.register("register", handlerRegister)
+	allCommands.register("reset", handlerReset)
+	allCommands.register("users", handlerUsers)
+	allCommands.register("agg", handlerAggregator)
+	allCommands.register("addFeed", handlerAddFeed)
 
 	if len(os.Args) < 2 {
 		fmt.Println("Please provide a command argument.")

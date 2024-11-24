@@ -18,4 +18,4 @@ SELECT id, created_at, updated_at, name
 FROM users;
 
 -- name: ResetUsers :exec
-TRUNCATE TABLE users;
+DELETE FROM users;

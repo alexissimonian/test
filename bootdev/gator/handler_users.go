@@ -17,10 +17,10 @@ func handlerReset(s *state, c command) error {
 
 	err := s.db.ResetUsers(context.Background())
 	if err != nil {
-		return fmt.Errorf("Could not restet db users: %v\n", err)
+		return fmt.Errorf("Could not reset db users: %v\n", err)
 	}
     
-    fmt.Printf("Successfully restet all users !\n")
+    fmt.Printf("Successfully reset all users !\n")
 	return nil
 }
 

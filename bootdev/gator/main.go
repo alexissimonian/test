@@ -42,7 +42,7 @@ func main() {
 	allCommands.register("reset", handlerReset)
 	allCommands.register("users", handlerUsers)
 	allCommands.register("agg", handlerAggregator)
-	allCommands.register("addFeed", handlerAddFeed)
+	allCommands.register("addfeed", handlerAddFeed)
 
 	if len(os.Args) < 2 {
 		fmt.Println("Please provide a command argument.")

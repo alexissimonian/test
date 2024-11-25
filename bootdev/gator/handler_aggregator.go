@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -10,46 +11,166 @@ import (
 )
 
 func handlerAggregator(s *state, c command) error {
-    //if len(c.args) != 1 {
-    //    return fmt.Errorf("Agg expects one argument. Got: %v\n", len(c.args))
-    //}
-    //feedURL := c.args[0]
-    rssFeed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
-    if err != nil {
-        return fmt.Errorf("Something went wrong getting your feed: %v\n", err)
-    }
+	if len(c.args) != 1 {
+		return fmt.Errorf("Agg expects only one duration argument like 1s, 1m, 1h. Got %v args.\n", len(c.args))
+	}
 
-    fmt.Printf("%v\n", rssFeed)
+	timeBetweenRequests, err := time.ParseDuration(c.args[0])
+	if err != nil {
+		return fmt.Errorf("Invalid duration argument. Expects format like 1s, 1m, 1h. Err: %v\n", err)
+	}
+	ticker := time.NewTicker(timeBetweenRequests)
+
+	for ; ; <- ticker.C {
+		feed, err := s.db.GetNextFeedToFetch(context.Background())
+		if err != nil {
+			return fmt.Errorf("Error getting next feed to fetch: %v\n", err)
+		}
+
+        rssFeed, err := fetchFeed(context.Background(), feed.Url)
+        if err != nil {
+            return fmt.Errorf("Error fetching feed with url: %v. Err: %v\n", feed.Url, err)
+        }
+
+		if err = s.db.MarkFeedFetched(context.Background(), database.MarkFeedFetchedParams{
+			ID:            feed.ID,
+			LastFetchedAt: sql.NullTime{Time: time.Now().UTC()},
+			UpdatedAt:     time.Now().UTC(),
+		}); err != nil {
+			return fmt.Errorf("Error marking feed as fetched: %v\n", err)
+		}
+
+        fmt.Printf("%v\n", rssFeed.Channel.Title)
+        for _, f := range rssFeed.Channel.Item {
+            fmt.Printf("%v\n", f.Title)
+        }
+	}
+}
+
+func handlerCreateFeed(s *state, c command, user database.User) error {
+	if len(c.args) != 2 {
+		return fmt.Errorf("Error, addfeed expects 2 arguments. Got: %v\n", len(c.args))
+	}
+
+	feedName := c.args[0]
+	feedUrl := c.args[1]
+
+	feed, err := s.db.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		Name:      feedName,
+		Url:       feedUrl,
+		UserID:    user.ID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("Error adding the feed to db: %v\n", err)
+	}
+
+	fmt.Printf("%v\n", feed)
+
+	// follow feed just added
+	_, err = s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("Error following the feed you just added: %v\n", err)
+	}
+
 	return nil
 }
 
-func handlerAddFeed(s *state, c command) error {
-    if len(c.args) != 2 {
-        return fmt.Errorf("Error, addfeed expects 2 arguments. Got: %v\n", len(c.args))
-    }
+func handlerListFeeds(s *state, c command) error {
+	if len(c.args) != 0 {
+		return fmt.Errorf("Error, feeds expects 0 arguments. Got: %v\n", len(c.args))
+	}
 
-    user, err := s.db.GetUser(context.Background(), s.config.CurrentUserName)
-    if err != nil {
-        return fmt.Errorf("Could not get current active user: %v\n", err)
-    }
+	getFeedsRow, err := s.db.GetFeeds(context.Background())
+	if err != nil {
+		return fmt.Errorf("Error getting your feeds: %v\n", err)
+	}
 
-    feedName := c.args[0]
-    feedUrl := c.args[1]
+	for i := range getFeedsRow {
+		fmt.Printf("%v\n%v\n%v\n",
+			getFeedsRow[i].Name,
+			getFeedsRow[i].Url,
+			getFeedsRow[i].Username,
+		)
+	}
 
-    feed,  err := s.db.AddFeed(context.Background(), database.AddFeedParams{
-        ID: uuid.New(),
-        CreatedAt: time.Now().UTC(),
-        UpdatedAt: time.Now().UTC(),
-        Name: feedName,
-        Url: feedUrl,
-        UserID: user.ID,
-    })
+	return nil
+}
 
-    if err != nil {
-        return fmt.Errorf("Error adding the feed to db: %v\n", err)
-    }
+func handlerFollowFeed(s *state, c command, user database.User) error {
+	if len(c.args) != 1 {
+		return fmt.Errorf("Follow expects one argument only. Got: %v\n", len(c.args))
+	}
 
-    fmt.Printf("%v\n", feed)
+	feedURL := c.args[0]
 
-    return nil
+	feed, err := s.db.GetFeedByUrl(context.Background(), feedURL)
+	if err != nil {
+		return fmt.Errorf("Error, this feed does not exist %v\n", err)
+	}
+
+	createFeedFollowRow, err := s.db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("Error when trying to make user: %v follow feed: %v\n", createFeedFollowRow.Username, createFeedFollowRow.Feedname)
+	}
+
+	fmt.Printf("%v is now following %v feed !\n", createFeedFollowRow.Username, createFeedFollowRow.Feedname)
+	return nil
+}
+
+func handlerFollowingFeed(s *state, c command, currentUser database.User) error {
+	if len(c.args) != 0 {
+
+	}
+
+	feedsFollowingByCurrentUser, err := s.db.GetFeedFollowsForUser(context.Background(), currentUser.ID)
+	if err != nil {
+		return fmt.Errorf("Error getting feeds of user: %v. Err: %v\n", currentUser.Name, err)
+	}
+
+	for _, ffbcu := range feedsFollowingByCurrentUser {
+		fmt.Printf("%v\n", ffbcu.Feedname)
+	}
+
+	return nil
+}
+
+func handlerUnfollowingFeed(s *state, c command, user database.User) error {
+	if len(c.args) != 1 {
+		return fmt.Errorf("Unfollow expects only one argument. Got: %v\n", len(c.args))
+	}
+
+	feedUrl := c.args[0]
+	feed, err := s.db.GetFeedByUrl(context.Background(), feedUrl)
+	if err != nil {
+		return fmt.Errorf("Something went wrong finding the feed to unfollow: %v\n", err)
+	}
+
+	err = s.db.RemoveFeedFollow(context.Background(), database.RemoveFeedFollowParams{
+		UserID: user.ID,
+		FeedID: feed.ID,
+	})
+
+	if err != nil {
+		return fmt.Errorf("Something went wrong unfollowing feed: %v for user: %v: err: %v", feed.Url, user.Name, err)
+	}
+
+	return nil
 }

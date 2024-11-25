@@ -42,7 +42,11 @@ func main() {
 	allCommands.register("reset", handlerReset)
 	allCommands.register("users", handlerUsers)
 	allCommands.register("agg", handlerAggregator)
-	allCommands.register("addfeed", handlerAddFeed)
+	allCommands.register("addfeed", middlewareLoggedIn(handlerCreateFeed))
+	allCommands.register("feeds", handlerListFeeds)
+	allCommands.register("follow", middlewareLoggedIn(handlerFollowFeed))
+	allCommands.register("following", middlewareLoggedIn(handlerFollowingFeed))
+	allCommands.register("unfollow", middlewareLoggedIn(handlerUnfollowingFeed))
 
 	if len(os.Args) < 2 {
 		fmt.Println("Please provide a command argument.")

@@ -40,10 +40,10 @@ type CreatePostParams struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	Title       string
-	Url         sql.NullString
+	Url         string
 	Description sql.NullString
-	PublishedAt sql.NullTime
-	FeedID      uuid.NullUUID
+	PublishedAt time.Time
+	FeedID      uuid.UUID
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) error {
@@ -63,7 +63,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) error {
 const getPostsForUser = `-- name: GetPostsForUser :many
 SELECT posts.id, posts.created_at, posts.updated_at, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id
 FROM posts
-INNER JOIN feed_follows ff ON feed_id = ff.feed_id AND ff.user_id = $1
+INNER JOIN feed_follows ff ON posts.feed_id = ff.feed_id AND ff.user_id = $1
 LIMIT $2
 `
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alexissimonian/test/bootdev/gator/internal/database"
@@ -21,16 +23,16 @@ func handlerAggregator(s *state, c command) error {
 	}
 	ticker := time.NewTicker(timeBetweenRequests)
 
-	for ; ; <- ticker.C {
+	for ; ; <-ticker.C {
 		feed, err := s.db.GetNextFeedToFetch(context.Background())
 		if err != nil {
 			return fmt.Errorf("Error getting next feed to fetch: %v\n", err)
 		}
 
-        rssFeed, err := fetchFeed(context.Background(), feed.Url)
-        if err != nil {
-            return fmt.Errorf("Error fetching feed with url: %v. Err: %v\n", feed.Url, err)
-        }
+		rssFeed, err := fetchFeed(context.Background(), feed.Url)
+		if err != nil {
+			return fmt.Errorf("Error fetching feed with url: %v. Err: %v\n", feed.Url, err)
+		}
 
 		if err = s.db.MarkFeedFetched(context.Background(), database.MarkFeedFetchedParams{
 			ID:            feed.ID,
@@ -39,11 +41,27 @@ func handlerAggregator(s *state, c command) error {
 		}); err != nil {
 			return fmt.Errorf("Error marking feed as fetched: %v\n", err)
 		}
-
-        fmt.Printf("%v\n", rssFeed.Channel.Title)
-        for _, f := range rssFeed.Channel.Item {
-            fmt.Printf("%v\n", f.Title)
-        }
+		for _, item := range rssFeed.Channel.Item {
+			publishedAt, err := time.Parse(time.RFC1123Z, item.PubDate)
+			if err != nil {
+				return fmt.Errorf("Problem parsing pubdate: %v\n", err)
+			}
+			if err = s.db.CreatePost(context.Background(), database.CreatePostParams{
+				ID:          uuid.New(),
+				CreatedAt:   time.Now().UTC(),
+				UpdatedAt:   time.Now().UTC(),
+				Title:       item.Title,
+				Url:         item.Link,
+				Description: sql.NullString{String: item.Description, Valid: true},
+				PublishedAt: publishedAt,
+				FeedID:      feed.ID,
+			}); err != nil {
+				if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
+					continue
+				}
+				fmt.Printf("Could not create post: %v\n", err)
+			}
+		}
 	}
 }
 
@@ -170,6 +188,34 @@ func handlerUnfollowingFeed(s *state, c command, user database.User) error {
 
 	if err != nil {
 		return fmt.Errorf("Something went wrong unfollowing feed: %v for user: %v: err: %v", feed.Url, user.Name, err)
+	}
+
+	return nil
+}
+
+func handlerBrowsePost(s *state, c command, user database.User) error {
+	if len(c.args) > 1 {
+		return fmt.Errorf("Browse accepts no more than 1 args. Got: %v\n", len(c.args))
+	}
+	limit := 2
+    if len(c.args) == 1 {
+        l, err := strconv.ParseInt(c.args[0], 0, 32)
+        if err != nil {
+            return fmt.Errorf("Browse expects an optional limit that is, a number. Got: %v\n", c.args[0])
+        }
+        limit = int(l)
+    }
+	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
+
+	if err != nil {
+		return fmt.Errorf("Could not get posts from user: %v. Err: %v\n", user.Name, err)
+	}
+
+	for _, post := range posts {
+		fmt.Printf("title: %v\ndescription: %v\nurl: %v\n", post.Title, post.Description.String, post.Url)
 	}
 
 	return nil

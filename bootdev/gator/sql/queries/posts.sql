@@ -22,5 +22,5 @@ INSERT INTO posts(
 -- name: GetPostsForUser :many
 SELECT posts.id, posts.created_at, posts.updated_at, posts.title, posts.url, posts.description, posts.published_at, posts.feed_id
 FROM posts
-INNER JOIN feed_follows ff ON feed_id = ff.feed_id AND ff.user_id = $1
+INNER JOIN feed_follows ff ON posts.feed_id = ff.feed_id AND ff.user_id = $1
 LIMIT $2;

@@ -47,6 +47,7 @@ func main() {
 	allCommands.register("follow", middlewareLoggedIn(handlerFollowFeed))
 	allCommands.register("following", middlewareLoggedIn(handlerFollowingFeed))
 	allCommands.register("unfollow", middlewareLoggedIn(handlerUnfollowingFeed))
+	allCommands.register("browse", middlewareLoggedIn(handlerBrowsePost))
 
 	if len(os.Args) < 2 {
 		fmt.Println("Please provide a command argument.")

@@ -1,35 +1,31 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"regexp"
 	"strings"
-	"sync/atomic"
+	"time"
+
+	"github.com/alexissimonian/test/bootdev/chirpy/internal/config"
+	"github.com/alexissimonian/test/bootdev/chirpy/internal/database"
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 )
-
-type apiConfig struct {
-	fileServerHits atomic.Int32
-}
-
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		cfg.fileServerHits.Add(1)
-		fmt.Printf("value: %v\n", cfg.fileServerHits.Load())
-		next.ServeHTTP(rw, r)
-	})
-}
 
 func main() {
 	cfg := apiConfig{}
+	loadConfig(&cfg)
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/app/", cfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))
 	serveMux.HandleFunc("GET /api/healthz", readinessHandler)
 	serveMux.HandleFunc("GET /admin/metrics", cfg.metricsHandler)
 	serveMux.HandleFunc("POST /admin/reset", cfg.resetMetricsHandler)
 	serveMux.HandleFunc("POST /api/validate_chirp", validateChirpHandler)
+	serveMux.HandleFunc("POST /api/users", createUserHandler)
 	server := &http.Server{}
 	server.Addr = ":8080"
 	server.Handler = serveMux
@@ -125,4 +121,88 @@ func validateChirpHandler(rw http.ResponseWriter, r *http.Request) {
 
 	rw.Write(data)
 	return
+}
+
+type createUserRequest struct {
+	Email string `json:"email"`
+}
+
+type createUserResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+func createUserHandler(rw http.ResponseWriter, r *http.Request) {
+	rw.Header().Add("Content-Type", "application/json")
+
+	request := createUserRequest{}
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&request)
+	if err != nil {
+		log.Printf("Error parsing request: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if len(request.Email) == 0 {
+		log.Println("Incorect request. No property email found")
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	config, err := config.Read()
+	if err != nil {
+		log.Printf("Error reading config: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	dburl := config.DbURL
+
+	openedDBConnection, err := sql.Open("postgres", dburl)
+	if err != nil {
+		log.Printf("Something went wrong opening database connection: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	db := database.New(openedDBConnection)
+
+	user, err := db.CreateUser(r.Context(), database.CreateUserParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Email:     request.Email,
+	})
+
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") {
+			log.Printf("Something went wrong creating user: %v\n", err)
+			rw.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		log.Printf("Something went wrong creating user: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	userCreated := createUserResponse{
+		ID:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	}
+
+	responseData, err := json.Marshal(&userCreated)
+	if err != nil {
+		log.Printf("Something went wrong encoding user into json: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	rw.WriteHeader(http.StatusCreated)
+	rw.Write(responseData)
 }

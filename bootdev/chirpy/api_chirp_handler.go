@@ -9,21 +9,14 @@ import (
 	"strings"
 )
 
-type chirpRequest struct {
+type ChirpCreateRequest struct {
 	Body string `json:"body"`
+	UserID string `json:"user_id"`
 }
 
-type chirpErrorResponse struct {
-	Error string `json:"error"`
-}
-
-type chirpCleanResponse struct {
-	CleanedBody string `json:"cleaned_body"`
-}
-
-func validateChirpHandler(rw http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Add("Content-Type", "application/json")
-	request := chirpRequest{}
+	request := ChirpCreateRequest{}
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&request)
 	if err != nil {
@@ -32,24 +25,21 @@ func validateChirpHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(request.Body) == 0 {
-		log.Println("Incorect request. No property body found")
-		rw.WriteHeader(http.StatusBadRequest)
-		return
+	err = validateChirp(&request)
+	if err != nil {
+		
+		rw.Write([]byte(err.Error()))
+	}
+}
+
+func validateChirp(r *ChirpCreateRequest) error {
+	err := validateChirpLength(r)
+	if err != nil {
+		log.Printf("Error validating chirp length: %v\n", err)
+		return err
 	}
 
-	if len(request.Body) > 140 {
-		errorResponse := chirpErrorResponse{Error: "Chirp is too long"}
-		data, err := json.Marshal(&errorResponse)
-		if err != nil {
-			log.Printf("Something went wrong encoding error into json: %v\n", err)
-			rw.WriteHeader(http.StatusInternalServerError)
-		}
-		rw.WriteHeader(http.StatusBadRequest)
-		rw.Write(data)
-		return
-	}
-
+	
 	bannedWords := [...]string{"kerfuffle", "fornax", "sharbert"}
 	for _, word := range bannedWords {
 		if strings.Contains(strings.ToLower(request.Body), word) {
@@ -69,4 +59,16 @@ func validateChirpHandler(rw http.ResponseWriter, r *http.Request) {
 
 	rw.Write(data)
 	return
+}
+
+func validateChirpLength(r *ChirpCreateRequest) error {
+	if len(r.Body) < 1 {
+		return fmt.Errorf("Incorect request. No property body found")
+	}
+
+	if len(r.Body) > 140 {
+		return fmt.Errorf("Chirp is too long")
+	}
+
+	return nil
 }

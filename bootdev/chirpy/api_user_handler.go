@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -75,4 +76,18 @@ func (cfg *apiConfig) createUserHandler(rw http.ResponseWriter, r *http.Request)
 
 	rw.WriteHeader(http.StatusCreated)
 	rw.Write(responseData)
+}
+
+func (cfg *apiConfig) resetUsers(r *http.Request) error {
+	if cfg.platform != "dev"{
+		fmt.Println("platform: ", cfg.platform)
+		return fmt.Errorf("Cannot reset users in prod !")
+	}
+
+	err := cfg.database.ResetUsers(r.Context())
+	if err != nil {
+		log.Printf("Something went wrong resetting users: %v\n", err)
+	}
+
+	return nil
 }

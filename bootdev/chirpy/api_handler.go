@@ -29,7 +29,23 @@ func (cfg *apiConfig) metricsHandler(rw http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-func (cfg *apiConfig) resetMetricsHandler(rw http.ResponseWriter, _ *http.Request) {
+func (cfg *apiConfig) resetAppHandler(rw http.ResponseWriter, r *http.Request) {
+	err := cfg.resetUsers(r)
+	if err != nil {
+		if err.Error() == "Cannot reset users in prod !" {
+			rw.WriteHeader(http.StatusForbidden)
+			rw.Write([]byte(err.Error()))
+			return
+		}
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	cfg.resetMetrics()
+	rw.Header().Add("Content-Type", "text/plain; charset=utf-8")
+	rw.Write([]byte("Hits and users reset to zero!"))
+}
+
+func (cfg *apiConfig) resetMetrics() {
 	cfg.fileServerHits.Store(0)
-	rw.Write([]byte("Hits reset to zero!"))
 }

@@ -3,33 +3,43 @@ package main
 import (
 	"database/sql"
 	"log"
+	"os"
 	"sync/atomic"
 
-	"github.com/alexissimonian/test/bootdev/chirpy/internal/config"
 	"github.com/alexissimonian/test/bootdev/chirpy/internal/database"
+	"github.com/joho/godotenv"
 )
 
 type apiConfig struct {
 	fileServerHits atomic.Int32
-	config config.Config
 	database *database.Queries
+	platform string
 }
 
 func loadConfig(c *apiConfig) {
-	loadConfigFile(c)
+	loadEnvVariables()
+	loadPlatform(c)
 	loadDatabase(c)
 }
 
-func loadConfigFile(c *apiConfig) {
-	config, err := config.Read()
+func loadEnvVariables(){
+	err := godotenv.Load()
 	if err != nil {
-		log.Panicf("Error reading config: %v\n", err)
+		log.Panicf("Something went wrong loading environment variables: %v\n", err)
 	}
-	c.config = config
+}
+
+func loadDbUrl() string {	
+	dbUrl := os.Getenv("DB_URL")
+	return dbUrl
+}
+
+func loadPlatform(c *apiConfig) {
+	c.platform = os.Getenv("PLATFORM")
 }
 
 func loadDatabase(c *apiConfig) {
-	dburl := c.config.DbURL
+	dburl := loadDbUrl()
 
 	openedDBConnection, err := sql.Open("postgres", dburl)
 	if err != nil {

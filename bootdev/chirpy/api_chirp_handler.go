@@ -7,11 +7,23 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
+
+	"github.com/alexissimonian/test/bootdev/chirpy/internal/database"
+	"github.com/google/uuid"
 )
 
 type ChirpCreateRequest struct {
 	Body string `json:"body"`
 	UserID string `json:"user_id"`
+}
+
+type ChirpCreateResponse struct {
+	ID uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body string `json:"body"`
+	UserID uuid.UUID `json:"user_id"`
 }
 
 func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request) {
@@ -27,9 +39,42 @@ func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request
 
 	err = validateChirp(&request)
 	if err != nil {
-		
+		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte(err.Error()))
+		return
 	}
+
+	userUUID, err := uuid.Parse(request.UserID)
+	if err != nil {
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte("Error: Invalid user id."))
+		return
+	}
+
+	chirp, err := cfg.database.CreateChirp(r.Context(), database.CreateChirpParams{
+		ID: uuid.New(),
+		Body: request.Body,
+		UserID: userUUID,
+	})
+
+	chirpResponse := ChirpCreateResponse{
+		ID: chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body: chirp.Body,
+		UserID: chirp.UserID,
+	}
+
+	responseData, err := json.Marshal(&chirpResponse)
+	if err != nil {
+		log.Printf("Something went wrong encoding chirp into json: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte(err.Error()))
+		return
+	}
+
+	rw.WriteHeader(http.StatusCreated)
+	rw.Write(responseData)
 }
 
 func validateChirp(r *ChirpCreateRequest) error {
@@ -39,26 +84,8 @@ func validateChirp(r *ChirpCreateRequest) error {
 		return err
 	}
 
-	
-	bannedWords := [...]string{"kerfuffle", "fornax", "sharbert"}
-	for _, word := range bannedWords {
-		if strings.Contains(strings.ToLower(request.Body), word) {
-			regexpPattern := fmt.Sprintf("(?i)%v", word)
-			regexp := regexp.MustCompile(regexpPattern)
-			request.Body = regexp.ReplaceAllString(request.Body, "****")
-		}
-	}
-
-	curratedResponse := chirpCleanResponse{CleanedBody: request.Body}
-	data, err := json.Marshal(&curratedResponse)
-	if err != nil {
-		log.Printf("Something went wrong when encoding response for currated content: %v\n", err)
-		rw.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	rw.Write(data)
-	return
+	currateChirpContent(r)
+	return nil
 }
 
 func validateChirpLength(r *ChirpCreateRequest) error {
@@ -71,4 +98,15 @@ func validateChirpLength(r *ChirpCreateRequest) error {
 	}
 
 	return nil
+}
+
+func currateChirpContent(r *ChirpCreateRequest) {
+	bannedWords := [...]string{"kerfuffle", "fornax", "sharbert"}
+	for _, word := range bannedWords {
+		if strings.Contains(strings.ToLower(r.Body), word) {
+			regexpPattern := fmt.Sprintf("(?i)%v", word)
+			regexp := regexp.MustCompile(regexpPattern)
+			r.Body = regexp.ReplaceAllString(r.Body, "****")
+		}
+	}
 }

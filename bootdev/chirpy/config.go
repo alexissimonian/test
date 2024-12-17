@@ -14,10 +14,12 @@ type apiConfig struct {
 	fileServerHits atomic.Int32
 	database *database.Queries
 	platform string
+	serverSecret string
 }
 
 func loadConfig(c *apiConfig) {
 	loadEnvVariables()
+	loadServerSecret(c)
 	loadPlatform(c)
 	loadDatabase(c)
 }
@@ -27,6 +29,10 @@ func loadEnvVariables(){
 	if err != nil {
 		log.Panicf("Something went wrong loading environment variables: %v\n", err)
 	}
+}
+
+func loadServerSecret(c *apiConfig){
+	c.serverSecret = os.Getenv("SERVER_SECRET")
 }
 
 func loadDbUrl() string {	

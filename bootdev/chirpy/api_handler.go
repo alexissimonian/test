@@ -38,6 +38,7 @@ func (cfg *apiConfig) resetAppHandler(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte(err.Error()))
 		return
 	}
 

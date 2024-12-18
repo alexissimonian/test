@@ -15,7 +15,6 @@ import (
 
 type ChirpCreateRequest struct {
 	Body string `json:"body"`
-	UserID string `json:"user_id"`
 }
 
 type ChirpCreateResponse struct {
@@ -51,8 +50,9 @@ func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userUUID, err := uuid.Parse(request.UserID)
+	userUUID, err := uuid.Parse(r.Header.Get("userID"))
 	if err != nil {
+        log.Printf("Invalid userID %v, userid: %v\n", err, userUUID)
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte("Error: Invalid user id."))
 		return

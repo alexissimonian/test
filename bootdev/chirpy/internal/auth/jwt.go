@@ -10,19 +10,19 @@ import (
 	"github.com/google/uuid"
 )
 
-func MakeJWT(userID uuid.UUID, secret string, expiresIn time.Duration) (string, error){
+func MakeJWT(userID uuid.UUID, secret string, expiresIn time.Duration) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Issuer: "Chirpy",
-		IssuedAt: jwt.NewNumericDate(time.Now().UTC()),
+		Issuer:    "Chirpy",
+		IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
-		Subject: userID.String(),
+		Subject:   userID.String(),
 	})
 
 	signedToken, err := token.SignedString([]byte(secret))
 	return signedToken, err
 }
 
-func ValidateJWT(token string, secret string) (uuid.UUID, error){
+func ValidateJWT(token string, secret string) (uuid.UUID, error) {
 	parsedToken, err := jwt.ParseWithClaims(token, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
@@ -53,3 +53,4 @@ func GetBearerToken(header http.Header) (string, error) {
 	token := strings.TrimPrefix(tokenBearer, "Bearer ")
 	return token, nil
 }
+

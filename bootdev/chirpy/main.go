@@ -14,11 +14,13 @@ func main() {
 	serveMux.HandleFunc("GET /api/healthz", readinessHandler)
 	serveMux.HandleFunc("GET /admin/metrics", cfg.metricsHandler)
 	serveMux.HandleFunc("POST /admin/reset", cfg.resetAppHandler)
-	serveMux.HandleFunc("POST /api/chirps", cfg.createChirpHandler)
+	serveMux.HandleFunc("POST /api/chirps", cfg.middlewareLoggedInUser(cfg.createChirpHandler))
 	serveMux.HandleFunc("GET /api/chirps", cfg.getChirpsHandler)
 	serveMux.HandleFunc("GET /api/chirps/{chirpID}", cfg.getChirpHandler)
 	serveMux.HandleFunc("POST /api/users", cfg.createUserHandler)
 	serveMux.HandleFunc("POST /api/login", cfg.loginHandler)
+	serveMux.HandleFunc("POST /api/refresh", cfg.refreshTokenHandler)
+	serveMux.HandleFunc("POST /api/revoke", cfg.revokeTokenHandler)
 	server := &http.Server{}
 	server.Addr = ":8080"
 	server.Handler = serveMux

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -88,6 +89,7 @@ func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request
 
 func (cfg *apiConfig) getChirpsHandler(rw http.ResponseWriter, r *http.Request) {
 	authorIDString := r.URL.Query().Get("author_id")
+	sortQueryParameter := r.URL.Query().Get("sort")
 	var authorID uuid.UUID
 	var err error
 	if len(authorIDString) > 0 {
@@ -105,6 +107,12 @@ func (cfg *apiConfig) getChirpsHandler(rw http.ResponseWriter, r *http.Request) 
 		chirps, err = cfg.database.GetChirpsByUser(r.Context(), authorID)
 	} else {
 		chirps, err = cfg.database.GetChirps(r.Context())
+	}
+
+	if sortQueryParameter == "asc" {
+		sortChirpsAsc(chirps)
+	} else if sortQueryParameter == "desc" {
+		sortChirpsDesc(chirps)
 	}
 
 	if err != nil {
@@ -265,4 +273,17 @@ func (cfg *apiConfig) deleteChirpHandler(rw http.ResponseWriter, r *http.Request
 	}
 
 	rw.WriteHeader(http.StatusNoContent)
+}
+
+
+func sortChirpsAsc(chirps []database.Chirp) {
+	sort.Slice(chirps, func(i, j int) bool {
+		return chirps[i].CreatedAt.Before(chirps[j].CreatedAt)
+	})
+}
+
+func sortChirpsDesc(chirps []database.Chirp) {
+	sort.Slice(chirps, func(i, j int) bool {
+		return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+	})
 }

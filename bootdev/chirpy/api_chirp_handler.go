@@ -33,7 +33,6 @@ type chirpResponse struct {
 }
 
 func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request) {
-	rw.Header().Add("Content-Type", "application/json")
 	request := chirpCreateRequest{}
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&request)
@@ -82,13 +81,32 @@ func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request
 		return
 	}
 
+	rw.Header().Add("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusCreated)
 	rw.Write(responseData)
 }
 
 func (cfg *apiConfig) getChirpsHandler(rw http.ResponseWriter, r *http.Request) {
-	rw.Header().Add("Content-Type", "application/json")
-	chirps, err := cfg.database.GetChirps(r.Context())
+	authorIDString := r.URL.Query().Get("author_id")
+	var authorID uuid.UUID
+	var err error
+	if len(authorIDString) > 0 {
+		authorID, err = uuid.Parse(authorIDString)
+		if err != nil {
+			log.Printf("Error parsing author id into uuid: %v\n", err)
+			rw.WriteHeader(http.StatusBadRequest)
+			rw.Write([]byte("Error author_id incorrect format"))
+			return
+		}
+	}
+
+	var chirps []database.Chirp
+	if authorID != uuid.Nil {
+		chirps, err = cfg.database.GetChirpsByUser(r.Context(), authorID)
+	} else {
+		chirps, err = cfg.database.GetChirps(r.Context())
+	}
+
 	if err != nil {
 		log.Printf("Something went wrong getting chirps: %v\n", err)
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -113,12 +131,12 @@ func (cfg *apiConfig) getChirpsHandler(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	rw.Header().Add("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 	rw.Write(chirpsResponseData)
 }
 
 func (cfg *apiConfig) getChirpHandler(rw http.ResponseWriter, r *http.Request) {
-	rw.Header().Add("Content-Type", "application/json")
 	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
@@ -155,6 +173,7 @@ func (cfg *apiConfig) getChirpHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	rw.Header().Add("Content-Type", "application/json")
 	rw.WriteHeader(http.StatusOK)
 	rw.Write(chirpResponseData)
 }
@@ -203,47 +222,47 @@ func (cfg *apiConfig) deleteChirpHandler(rw http.ResponseWriter, r *http.Request
 		return
 	}
 
-    chirpID, err := uuid.Parse(r.PathValue("chirpID"))
-    if err != nil {
-        log.Printf("Error parsing chirpId from request path: %v\n", err)
-        rw.WriteHeader(http.StatusBadRequest)
-        rw.Write([]byte("Chirp id not recognised"))
-        return
-    }
+	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		log.Printf("Error parsing chirpId from request path: %v\n", err)
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte("Chirp id not recognised"))
+		return
+	}
 
-    chirp, err := cfg.database.GetChirp(r.Context(), chirpID)
-    if err != nil {
-        if strings.Contains(err.Error(), "no rows in result set"){
-            log.Printf("Chirp not found")
-            rw.WriteHeader(http.StatusNotFound)
-            rw.Write([]byte("Not found"))
-            return
-        }
+	chirp, err := cfg.database.GetChirp(r.Context(), chirpID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows in result set") {
+			log.Printf("Chirp not found")
+			rw.WriteHeader(http.StatusNotFound)
+			rw.Write([]byte("Not found"))
+			return
+		}
 
-        log.Printf("Error when getting chirp: %v\n", err)
-        rw.WriteHeader(http.StatusInternalServerError)
-        rw.Write([]byte("Error when getting chirp"))
-        return
-    }
+		log.Printf("Error when getting chirp: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte("Error when getting chirp"))
+		return
+	}
 
-    if userID != chirp.UserID {
-        log.Printf("Forbidden deletion tentative. User: %v tried to delete chirp: %v\n", userID, chirp.ID)
-        rw.WriteHeader(http.StatusForbidden)
-        rw.Write([]byte("Forbidden request"))
-        return
-    }
+	if userID != chirp.UserID {
+		log.Printf("Forbidden deletion tentative. User: %v tried to delete chirp: %v\n", userID, chirp.ID)
+		rw.WriteHeader(http.StatusForbidden)
+		rw.Write([]byte("Forbidden request"))
+		return
+	}
 
-    err = cfg.database.DeleteChirp(r.Context(), database.DeleteChirpParams{
-        ID: chirp.ID,
-        UserID: userID,
-    })
+	err = cfg.database.DeleteChirp(r.Context(), database.DeleteChirpParams{
+		ID:     chirp.ID,
+		UserID: userID,
+	})
 
-    if err != nil {
-        log.Printf("Something went wrong deleting chirp: %v, %v\n", chirp.ID, err)
-        rw.WriteHeader(http.StatusInternalServerError)
-        rw.Write([]byte("Error deleting chirp"))
-        return
-    }
+	if err != nil {
+		log.Printf("Something went wrong deleting chirp: %v, %v\n", chirp.ID, err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte("Error deleting chirp"))
+		return
+	}
 
-    rw.WriteHeader(http.StatusNoContent)
+	rw.WriteHeader(http.StatusNoContent)
 }

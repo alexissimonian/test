@@ -12,30 +12,36 @@ import (
 
 type apiConfig struct {
 	fileServerHits atomic.Int32
-	database *database.Queries
-	platform string
-	serverSecret string
+	database       *database.Queries
+	platform       string
+	serverSecret   string
+	polkaApiKey    string
 }
 
 func loadConfig(c *apiConfig) {
 	loadEnvVariables()
+    loadPolkaApiKey(c)
 	loadServerSecret(c)
 	loadPlatform(c)
 	loadDatabase(c)
 }
 
-func loadEnvVariables(){
+func loadEnvVariables() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Panicf("Something went wrong loading environment variables: %v\n", err)
 	}
 }
 
-func loadServerSecret(c *apiConfig){
+func loadPolkaApiKey(c *apiConfig) {
+    c.polkaApiKey = os.Getenv("POLKA_KEY")
+}
+
+func loadServerSecret(c *apiConfig) {
 	c.serverSecret = os.Getenv("SERVER_SECRET")
 }
 
-func loadDbUrl() string {	
+func loadDbUrl() string {
 	dbUrl := os.Getenv("DB_URL")
 	return dbUrl
 }
@@ -54,3 +60,4 @@ func loadDatabase(c *apiConfig) {
 
 	c.database = database.New(openedDBConnection)
 }
+

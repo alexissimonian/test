@@ -25,10 +25,11 @@ type loginUserRequest struct {
 }
 
 type createUserResponse struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 type loginResponse struct {
@@ -38,6 +39,7 @@ type loginResponse struct {
 	Email        string    `json:"email"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
 }
 
 func (cfg *apiConfig) createUserHandler(rw http.ResponseWriter, r *http.Request) {
@@ -79,7 +81,7 @@ func (cfg *apiConfig) createUserHandler(rw http.ResponseWriter, r *http.Request)
 		if strings.Contains(err.Error(), "duplicate key") {
 			log.Printf("Something went wrong creating user: %v\n", err)
 			rw.WriteHeader(http.StatusBadRequest)
-            rw.Write([]byte("User already exists"))
+			rw.Write([]byte("User already exists"))
 			return
 		}
 
@@ -89,10 +91,11 @@ func (cfg *apiConfig) createUserHandler(rw http.ResponseWriter, r *http.Request)
 	}
 
 	userCreated := createUserResponse{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+		ID:          user.ID,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		Email:       user.Email,
+		IsChirpyRed: user.IsChirpyRed,
 	}
 
 	responseData, err := json.Marshal(&userCreated)
@@ -185,6 +188,7 @@ func (cfg *apiConfig) loginHandler(rw http.ResponseWriter, r *http.Request) {
 		Email:        user.Email,
 		Token:        token,
 		RefreshToken: refreshToken,
+		IsChirpyRed:  user.IsChirpyRed,
 	}
 
 	responseData, err := json.Marshal(&loginResponse)
@@ -210,4 +214,75 @@ func (cfg *apiConfig) resetUsers(r *http.Request) error {
 	}
 
 	return nil
+}
+
+type updateUserRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type updateUserResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+func (cfg *apiConfig) updateUserHandler(rw http.ResponseWriter, r *http.Request) {
+	userIDString := r.Header.Get("userID")
+	request := updateUserRequest{}
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&request)
+	if err != nil {
+		log.Printf("Error decoding request: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte("Error when decoding request"))
+		return
+	}
+
+	if len(request.Email) == 0 || len(request.Password) == 0 {
+		log.Printf("Invalid email: %v\n, or password: %v\n", request.Email, request.Password)
+		rw.WriteHeader(http.StatusBadRequest)
+		rw.Write([]byte("Please provide valid email or password"))
+	}
+
+	passwordHash, err := auth.HashPassword(request.Password)
+	if err != nil {
+		log.Printf("Error hashing password: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte(err.Error()))
+		return
+	}
+
+	userID, err := uuid.Parse(userIDString)
+	if err != nil {
+		log.Printf("Error when parsing userID into UUID: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte("Error when parsing user id"))
+		return
+	}
+
+	user, err := cfg.database.UpdateUser(r.Context(), database.UpdateUserParams{
+		ID:           userID,
+		Email:        request.Email,
+		PasswordHash: passwordHash,
+		UpdatedAt:    time.Now().UTC(),
+	})
+
+	updateUserResponse := updateUserResponse{
+		ID:        user.ID,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+	}
+
+	updateUserResponseData, err := json.Marshal(&updateUserResponse)
+	if err != nil {
+		log.Printf("Error when encoding response: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte("Error when encoding response"))
+		return
+	}
+
+	rw.Write(updateUserResponseData)
 }

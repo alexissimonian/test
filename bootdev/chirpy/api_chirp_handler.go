@@ -13,28 +13,28 @@ import (
 	"github.com/google/uuid"
 )
 
-type ChirpCreateRequest struct {
+type chirpCreateRequest struct {
 	Body string `json:"body"`
 }
 
-type ChirpCreateResponse struct {
-	ID uuid.UUID `json:"id"`
+type chirpCreateResponse struct {
+	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	Body string `json:"body"`
-	UserID uuid.UUID `json:"user_id"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
-type ChirpResponse struct {
-	ID uuid.UUID `json:"id"`
+type chirpResponse struct {
+	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	Body string `json:"body"`
+	Body      string    `json:"body"`
 }
 
 func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Add("Content-Type", "application/json")
-	request := ChirpCreateRequest{}
+	request := chirpCreateRequest{}
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&request)
 	if err != nil {
@@ -52,26 +52,26 @@ func (cfg *apiConfig) createChirpHandler(rw http.ResponseWriter, r *http.Request
 
 	userUUID, err := uuid.Parse(r.Header.Get("userID"))
 	if err != nil {
-        log.Printf("Invalid userID %v, userid: %v\n", err, userUUID)
+		log.Printf("Invalid userID %v, userid: %v\n", err, userUUID)
 		rw.WriteHeader(http.StatusBadRequest)
 		rw.Write([]byte("Error: Invalid user id."))
 		return
 	}
 
 	chirp, err := cfg.database.CreateChirp(r.Context(), database.CreateChirpParams{
-		ID: uuid.New(),
+		ID:        uuid.New(),
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
-		Body: request.Body,
-		UserID: userUUID,
+		Body:      request.Body,
+		UserID:    userUUID,
 	})
 
-	chirpResponse := ChirpCreateResponse{
-		ID: chirp.ID,
+	chirpResponse := chirpCreateResponse{
+		ID:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
 		UpdatedAt: chirp.UpdatedAt,
-		Body: chirp.Body,
-		UserID: chirp.UserID,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
 	}
 
 	responseData, err := json.Marshal(&chirpResponse)
@@ -96,13 +96,13 @@ func (cfg *apiConfig) getChirpsHandler(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	chirpsResponse := []ChirpResponse{}
+	chirpsResponse := []chirpResponse{}
 	for _, chrip := range chirps {
-		chirpsResponse = append(chirpsResponse, ChirpResponse{
-			ID: chrip.ID,
+		chirpsResponse = append(chirpsResponse, chirpResponse{
+			ID:        chrip.ID,
 			CreatedAt: chrip.CreatedAt,
 			UpdatedAt: chrip.UpdatedAt,
-			Body: chrip.Body,
+			Body:      chrip.Body,
 		})
 	}
 	chirpsResponseData, err := json.Marshal(&chirpsResponse)
@@ -140,11 +140,11 @@ func (cfg *apiConfig) getChirpHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chirpResponse := ChirpResponse{
-		ID: chirp.ID,
+	chirpResponse := chirpResponse{
+		ID:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
 		UpdatedAt: chirp.UpdatedAt,
-		Body: chirp.Body,
+		Body:      chirp.Body,
 	}
 
 	chirpResponseData, err := json.Marshal(&chirpResponse)
@@ -159,7 +159,7 @@ func (cfg *apiConfig) getChirpHandler(rw http.ResponseWriter, r *http.Request) {
 	rw.Write(chirpResponseData)
 }
 
-func validateChirp(r *ChirpCreateRequest) error {
+func validateChirp(r *chirpCreateRequest) error {
 	err := validateChirpLength(r)
 	if err != nil {
 		log.Printf("Error validating chirp length: %v\n", err)
@@ -170,7 +170,7 @@ func validateChirp(r *ChirpCreateRequest) error {
 	return nil
 }
 
-func validateChirpLength(r *ChirpCreateRequest) error {
+func validateChirpLength(r *chirpCreateRequest) error {
 	if len(r.Body) < 1 {
 		return fmt.Errorf("Incorect request. No property body found")
 	}
@@ -182,7 +182,7 @@ func validateChirpLength(r *ChirpCreateRequest) error {
 	return nil
 }
 
-func currateChirpContent(r *ChirpCreateRequest) {
+func currateChirpContent(r *chirpCreateRequest) {
 	bannedWords := [...]string{"kerfuffle", "fornax", "sharbert"}
 	for _, word := range bannedWords {
 		if strings.Contains(strings.ToLower(r.Body), word) {
@@ -191,4 +191,59 @@ func currateChirpContent(r *ChirpCreateRequest) {
 			r.Body = regexp.ReplaceAllString(r.Body, "****")
 		}
 	}
+}
+
+func (cfg *apiConfig) deleteChirpHandler(rw http.ResponseWriter, r *http.Request) {
+	userIDString := r.Header.Get("userID")
+	userID, err := uuid.Parse(userIDString)
+	if err != nil {
+		log.Printf("Error parsing user id into uuid: %v\n", err)
+		rw.WriteHeader(http.StatusInternalServerError)
+		rw.Write([]byte("Error parsing user id"))
+		return
+	}
+
+    chirpID, err := uuid.Parse(r.PathValue("chirpID"))
+    if err != nil {
+        log.Printf("Error parsing chirpId from request path: %v\n", err)
+        rw.WriteHeader(http.StatusBadRequest)
+        rw.Write([]byte("Chirp id not recognised"))
+        return
+    }
+
+    chirp, err := cfg.database.GetChirp(r.Context(), chirpID)
+    if err != nil {
+        if strings.Contains(err.Error(), "no rows in result set"){
+            log.Printf("Chirp not found")
+            rw.WriteHeader(http.StatusNotFound)
+            rw.Write([]byte("Not found"))
+            return
+        }
+
+        log.Printf("Error when getting chirp: %v\n", err)
+        rw.WriteHeader(http.StatusInternalServerError)
+        rw.Write([]byte("Error when getting chirp"))
+        return
+    }
+
+    if userID != chirp.UserID {
+        log.Printf("Forbidden deletion tentative. User: %v tried to delete chirp: %v\n", userID, chirp.ID)
+        rw.WriteHeader(http.StatusForbidden)
+        rw.Write([]byte("Forbidden request"))
+        return
+    }
+
+    err = cfg.database.DeleteChirp(r.Context(), database.DeleteChirpParams{
+        ID: chirp.ID,
+        UserID: userID,
+    })
+
+    if err != nil {
+        log.Printf("Something went wrong deleting chirp: %v, %v\n", chirp.ID, err)
+        rw.WriteHeader(http.StatusInternalServerError)
+        rw.Write([]byte("Error deleting chirp"))
+        return
+    }
+
+    rw.WriteHeader(http.StatusNoContent)
 }
